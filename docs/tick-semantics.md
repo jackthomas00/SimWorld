@@ -140,10 +140,11 @@ After valid births are selected, accepted births allocate IDs in ascending paren
 Implementation details (`resolveReproduction` in `internal/sim/reproduction.go`):
 
 - Intents are sorted by parent ID, then destination X, then destination Y. A parent that submitted more than one reproduction intent has all of them rejected.
-- The parent must exist, be alive, and have strictly more energy than `ReproductionRules.EnergyCost`, so reproduction never kills the parent.
+- Each creature kind has its own `BirthRules` in `ReproductionRules`; both kinds' rules are validated at the start of the phase. A parent whose kind has no birth rules is rejected.
+- The parent must exist, be alive, and have strictly more energy than its kind's `EnergyCost`, so reproduction never kills the parent.
 - The offspring cell must be in bounds, adjacent to the parent (Chebyshev distance at most 1), and free of living creatures in the post-feeding state. Creatures that died earlier in the tick do not block it, and plants never block it.
 - Pass 1 validates intents and resolves cell conflicts without allocating IDs. Pass 2 first verifies every ID from `NextEntity` to `NextEntity + accepted - 1` is unused and that `NextEntity` can advance past them without reaching the reserved value `MaxUint64`, and only then mutates state. A failed allocation check leaves the working state untouched.
-- Newborns copy the parent's kind and start with `OffspringEnergy` and `OffspringHealth` (both must be positive), age `0`, and version `0`.
+- Newborns copy the parent's kind and start with that kind's `OffspringEnergy` and `OffspringHealth` (both must be positive), age `0`, and version `0`.
 
 ### Deterministic Randomness
 
@@ -159,6 +160,11 @@ Decision-kind IDs are stable:
 | Movement intent     | `1` |
 | Feeding intent      | `2` |
 | Reproduction intent | `3` |
+| Plant seeding       | `4` |
+| Plant sprouting     | `5` |
+| Initial placement   | `6` |
+
+Sprouting and initial placement are not per-entity decisions. They use actor ID `0`, which is never a valid entity ID, as the world's own actor.
 
 
 The decision ordinal is a zero-based unsigned 64-bit integer. If an entity can make only one decision of a given kind during a tick, the ordinal is `0`. If an entity can make multiple same-kind decisions in one tick, the ordinal must be assigned by an explicit deterministic rule for that decision kind.
@@ -243,6 +249,24 @@ The initial implementation may use a deep copy of mutable state to achieve isola
 Because the current `World` shape exposes maps and slices directly, the first implementation must protect `Step()` and all reads of committed world state with a single world-level mutex. Replacing maps, slices, or fields one at a time is not an atomic publication mechanism and does not satisfy the reader guarantee.
 
 A later implementation may instead store the committed state behind a single immutable state pointer and publish the completed next state with one atomic pointer swap. That refactor must stop exposing mutable committed maps and slices directly, or must expose only immutable snapshots. Optimizations such as copy-on-write can be introduced later without changing the observable semantics.
+
+Implementation details (`World.Step` in `internal/sim/transition.go`):
+
+- `Step` holds the world mutex for the whole transition and never calls the public getters, which take the same lock.
+- The intent generator receives its own deep copy of S_t, separate from the working state, so a generator cannot change committed state even when it fails.
+- Environment, order: aging, then plant growth, then seeding and sprouting, then metabolism.
+- Environment, aging: every living plant (in `PlantIDs` order) and creature (in `CreatureIDs` order) ages by one tick, and its `Version` increments. One whose age reaches its kind's `AgingRules` lifespan dies; a lifespan of `0` means no limit. Age saturates at the maximum `uint32` value instead of overflowing. Aging runs first, so cells of plants that die of age are free for that tick's seedlings and sprouts, and cells of creatures that die of age are free for movement. Entities created later in the tick start at age `0`.
+- Environment, growth: every living plant gains `EnvironmentRules.PlantGrowth` (non-negative) in `PlantIDs` order. Growth is uncapped. Depleted plants do not regrow. Energy overflow aborts the tick.
+- Environment, seeding (`internal/sim/environment.go`): enabled when `SeedThreshold` is positive. After growth, each living plant with at least `SeedThreshold` energy places one seedling, using the same two passes as reproduction:
+  1. Plants are visited in ascending ID order. Each eligible plant draws exactly one value from its plant-seeding stream (seed tuple: world seed, S_t's tick, plant ID, `4`, `0`) and picks uniformly among its in-bounds neighbors with no living plant. Cells claimed by lower-ID plants this tick are excluded. Creatures and depleted plants do not block a cell. A plant with no free neighbor does not seed and pays nothing.
+  2. Sprouting selection, below, runs next and claims cells the same way.
+  3. ID allocation for every selected seedling and sprout is checked before any mutation. Then seedlings are created in parent ID order, each parent paying `SeedCost`, followed by sprouts in attempt order. New plants get the next ID, health `1`, age `0`, and version `0`.
+
+- Environment, sprouting: enabled when `SproutAttempts` is positive, at most `MaxSproutAttempts`. All attempts share one stream (seed tuple: world seed, S_t's tick, `0`, `5`, `0`), and each attempt draws exactly two values: X is the first modulo `Width`, Y the second modulo `Height`. A chosen cell without a living plant, including one claimed by a seedling this tick, gets a plant with `SproutEnergy`. Sprouting acts as a seed bank: plants cannot go permanently extinct.
+- Environment, metabolism: after plants are placed, each living creature pays its kind's `MetabolismRules` upkeep in `CreatureIDs` order. A creature whose energy reaches zero dies and is rejected by later phases in the same tick, even though intent generation (reading S_t) may have produced intents for it.
+
+  `SeedThreshold` must exceed `SeedCost`, so seeding never kills the parent. Seedlings do not grow in the tick they appear, and they are not visible to that tick's intent generation, which reads S_t. Because the environment runs before reproduction, seedlings in a tick receive lower IDs than that tick's births.
+- Cleanup removes dead creatures and depleted plants from both the maps and the ID slices, keeping survivors in order. The working state's `Tick` is then set to S_t's tick plus one and the whole state is validated. Publication is one assignment of the working state, so tick and entities change together.
 
 ## 6. Determinism and Testing
 
