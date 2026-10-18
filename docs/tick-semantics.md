@@ -281,6 +281,7 @@ Tests must cover:
 - Repeatability across repeated runs with the same seed.
 - Invariant preservation at the commit boundary.
 
+These are integration tests in `internal/sim/transition_test.go`. Rollback tests compare the full committed state before and after a failed step: maps, ID slices, entity fields, versions, and `NextEntity`, not just the tick. The concurrency tests (concurrent readers and concurrent `Step` calls) should be run with `go test -race ./...`. The race detector finds unsynchronized access, but passing it does not by itself prove atomicity or determinism.
 
 
 ## 7. Future Distributed Execution
