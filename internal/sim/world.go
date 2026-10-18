@@ -44,6 +44,11 @@ type World struct {
 	rules    Rules
 	generate IntentGenerator
 	state    WorldState
+
+	// behavior is set when generate comes from WithBehavior, and custom when
+	// it comes from WithIntentGenerator. Checkpoint needs to know which.
+	behavior *BehaviorRules
+	custom   bool
 }
 
 // WorldOption customizes a World at construction.
@@ -55,9 +60,30 @@ func WithRules(rules Rules) WorldOption {
 }
 
 // WithIntentGenerator sets the intent generator Step uses. Without one, every
-// tick runs with no intents.
+// tick runs with no intents. A world with a custom generator cannot be
+// checkpointed; use WithBehavior for worlds that must be.
 func WithIntentGenerator(generate IntentGenerator) WorldOption {
-	return func(w *World) { w.generate = generate }
+	return func(w *World) {
+		w.generate = generate
+		w.behavior, w.custom = nil, false
+		if generate != nil {
+			w.custom = true
+		}
+	}
+}
+
+// WithBehavior drives creatures with NewBehaviorGenerator(rules). Invalid rules
+// make every Step fail during intent generation, like other rules, which are
+// validated when their phase runs.
+func WithBehavior(rules BehaviorRules) WorldOption {
+	return func(w *World) {
+		generate, err := NewBehaviorGenerator(rules)
+		if err != nil {
+			generate = func(WorldConfig, WorldState) (Intents, error) { return Intents{}, err }
+		}
+		w.generate = generate
+		w.behavior, w.custom = &rules, false
+	}
 }
 
 func NewWorld(id string, config WorldConfig, opts ...WorldOption) *World {

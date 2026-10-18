@@ -40,6 +40,28 @@ func DefaultBehaviorRules() BehaviorRules {
 	}
 }
 
+// Validate reports whether the rules can drive a generator.
+func (rules BehaviorRules) Validate() error {
+	if rules.SenseRadius < 1 || rules.SenseRadius > MaxSenseRadius {
+		return fmt.Errorf("sense radius must be between 1 and %d: %d", MaxSenseRadius, rules.SenseRadius)
+	}
+	if rules.FleeRadius < 1 || rules.FleeRadius > rules.SenseRadius {
+		return fmt.Errorf("flee radius must be between 1 and sense radius %d: %d", rules.SenseRadius, rules.FleeRadius)
+	}
+	if rules.HerbivoreBite <= 0 {
+		return fmt.Errorf("herbivore bite must be positive: %d", rules.HerbivoreBite)
+	}
+	if rules.PredatorSatedAt < 0 {
+		return fmt.Errorf("predator satiation must be non-negative: %d", rules.PredatorSatedAt)
+	}
+	if rules.HerbivoreReproduceAt <= 0 || rules.PredatorReproduceAt <= 0 {
+		return fmt.Errorf("reproduction thresholds must be positive: herbivore %d, predator %d",
+			rules.HerbivoreReproduceAt, rules.PredatorReproduceAt)
+	}
+
+	return nil
+}
+
 // NewBehaviorGenerator returns an IntentGenerator that drives herbivores and
 // predators. Intents depend only on the snapshot, the config and the rules.
 //
@@ -60,21 +82,8 @@ func DefaultBehaviorRules() BehaviorRules {
 // stream and one from its reproduction stream every tick, used or not.
 // Feeding decisions are deterministic and draw nothing.
 func NewBehaviorGenerator(rules BehaviorRules) (IntentGenerator, error) {
-	if rules.SenseRadius < 1 || rules.SenseRadius > MaxSenseRadius {
-		return nil, fmt.Errorf("sense radius must be between 1 and %d: %d", MaxSenseRadius, rules.SenseRadius)
-	}
-	if rules.FleeRadius < 1 || rules.FleeRadius > rules.SenseRadius {
-		return nil, fmt.Errorf("flee radius must be between 1 and sense radius %d: %d", rules.SenseRadius, rules.FleeRadius)
-	}
-	if rules.HerbivoreBite <= 0 {
-		return nil, fmt.Errorf("herbivore bite must be positive: %d", rules.HerbivoreBite)
-	}
-	if rules.PredatorSatedAt < 0 {
-		return nil, fmt.Errorf("predator satiation must be non-negative: %d", rules.PredatorSatedAt)
-	}
-	if rules.HerbivoreReproduceAt <= 0 || rules.PredatorReproduceAt <= 0 {
-		return nil, fmt.Errorf("reproduction thresholds must be positive: herbivore %d, predator %d",
-			rules.HerbivoreReproduceAt, rules.PredatorReproduceAt)
+	if err := rules.Validate(); err != nil {
+		return nil, err
 	}
 
 	return func(config WorldConfig, snapshot WorldState) (Intents, error) {

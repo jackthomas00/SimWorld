@@ -187,13 +187,12 @@ func DefaultExperiment() Experiment {
 }
 
 func (e Experiment) Run(seed uint64) (Trial, error) {
-	generate, err := NewBehaviorGenerator(e.Behavior)
-	if err != nil {
+	if err := e.Behavior.Validate(); err != nil {
 		return Trial{}, err
 	}
 	config := e.Config
 	config.Seed = seed
-	w, err := NewPopulatedWorld("experiment", config, e.Initial, WithRules(e.Rules), WithIntentGenerator(generate))
+	w, err := NewPopulatedWorld("experiment", config, e.Initial, WithRules(e.Rules), WithBehavior(e.Behavior))
 	if err != nil {
 		return Trial{}, err
 	}

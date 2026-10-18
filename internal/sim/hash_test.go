@@ -19,11 +19,7 @@ func hashedWorld(t *testing.T, size int32, seed uint64) *World {
 	config.RegionWidth, config.RegionHeight = size, size
 	config.Seed = seed
 
-	generate, err := NewBehaviorGenerator(e.Behavior)
-	if err != nil {
-		t.Fatalf("NewBehaviorGenerator: %v", err)
-	}
-	w, err := NewPopulatedWorld("hash", config, e.Initial, WithRules(e.Rules), WithIntentGenerator(generate))
+	w, err := NewPopulatedWorld("hash", config, e.Initial, WithRules(e.Rules), WithBehavior(e.Behavior))
 	if err != nil {
 		t.Fatalf("NewPopulatedWorld: %v", err)
 	}
