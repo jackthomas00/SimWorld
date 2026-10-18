@@ -294,6 +294,22 @@ These are integration tests in `internal/sim/transition_test.go`. Rollback tests
 - every field affects the hash;
 - one golden hash is pinned. The golden test fails on any change to simulation results, so update it only for intended rule changes.
 
+### Checkpoints
+
+A checkpoint (`sim.Checkpoint`) holds everything that decides future ticks:
+
+- the world ID, config (including the seed), rules and behavior rules;
+- the committed state.
+
+Randomness is counter-based, so there is no generator state to save.
+
+- `World.Checkpoint` captures the committed state under the read lock.
+- `sim.Restore` validates the state as a commit would, and the restored world keeps its own copy.
+- `internal/checkpoint` stores checkpoints as versioned JSON, with entities as lists in ID-slice order. `Load` rejects any file whose state does not match its stored hash.
+- `Save` is atomic: it writes a temporary file, syncs it, renames it over the target and syncs the directory.
+
+The resume guarantee: a world saved after tick N, loaded and stepped M times has the same hash at every tick as an uninterrupted run of N+M ticks. `internal/checkpoint` tests this through a file on disk.
+
 ## 7. Future Distributed Execution
 
 Regions may eventually execute on separate workers, but region ownership must not change the rules above.

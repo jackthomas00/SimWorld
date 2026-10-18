@@ -23,6 +23,7 @@ go run ./cmd/simworld -seeds 3 -trace -every 50
 | Path | Contents |
 | ---- | -------- |
 | `internal/sim` | World state, the tick pipeline (`transition.go`), per-phase resolvers, validation, decision randomness, behavior and experiment harness |
+| `internal/checkpoint` | Versioned JSON checkpoint files: hash-verified load, atomic save |
 | `cmd/simworld` | CLI for running seed sweeps |
 
 ## Docs

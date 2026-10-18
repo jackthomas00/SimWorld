@@ -17,9 +17,9 @@ The goal is to prove that two runs are identical, and that a run can stop and re
 
 1. **Canonical state hash** (done). Encode `WorldState` in a fixed binary layout: tick, `NextEntity`, then every creature and plant in ID-slice order (that order drives phase iteration, so it is part of the state), field by field. Hash the result with SHA-256. Do not hash JSON or map iteration order.
    - *Exit:* two runs from the same seed produce the same hash at every tick for 1000 ticks. A golden-hash test pins the hash for one seed at one tick, so any change to the rules or to determinism fails it.
-2. **Checkpoint save and load.** Use a versioned JSON snapshot holding the schema version, world ID, config, `Rules`, `BehaviorRules`, the full `WorldState` and its hash.
+2. **Checkpoint save and load** (done; `internal/checkpoint`). Use a versioned JSON snapshot holding the schema version, world ID, config, `Rules`, `BehaviorRules`, the full `WorldState` and its hash.
    - On load, run `validateState`, recompute the hash, and reject any mismatch.
-   - The intent generator is a func, so a checkpoint must store `BehaviorRules` and rebuild the generator from them.
+   - The intent generator is a func, so a checkpoint must store `BehaviorRules` and rebuild the generator from them. Worlds built with `WithBehavior` can be checkpointed. Worlds built with a custom `WithIntentGenerator` are refused.
    - *Exit:* run N ticks, save, load into a fresh `World` and run M more ticks. The hashes must match an uninterrupted N+M run at every tick.
 3. **CLI support.** Print a hash per sample in `-trace`, and add save and resume flags.
 4. **Event log (optional).** The movement, feeding and reproduction resolvers already return outcomes and rejections, and these could become a per-tick event record. Defer this until replay or debugging needs it.
