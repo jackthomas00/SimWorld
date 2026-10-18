@@ -284,6 +284,16 @@ Tests must cover:
 These are integration tests in `internal/sim/transition_test.go`. Rollback tests compare the full committed state before and after a failed step: maps, ID slices, entity fields, versions, and `NextEntity`, not just the tick. The concurrency tests (concurrent readers and concurrent `Step` calls) should be run with `go test -race ./...`. The race detector finds unsynchronized access, but passing it does not by itself prove atomicity or determinism.
 
 
+### State Hash
+
+`WorldState.Hash` (`internal/sim/hash.go`) is the identity of a committed state. It is a SHA-256 over a fixed big-endian encoding: a versioned domain tag, `Tick`, `NextEntity`, then every creature and every plant with all of their fields. Entities are encoded in ID-slice order, because that order drives phase iteration and is part of the state. Two states with equal hashes are treated as the same state. Any change to the layout must bump the domain tag's version.
+
+`hash_test.go` checks the following:
+
+- two runs from the same seed hash identically at every tick for 1000 ticks;
+- every field affects the hash;
+- one golden hash is pinned. The golden test fails on any change to simulation results, so update it only for intended rule changes.
+
 ## 7. Future Distributed Execution
 
 Regions may eventually execute on separate workers, but region ownership must not change the rules above.

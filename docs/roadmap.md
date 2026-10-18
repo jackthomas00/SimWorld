@@ -15,7 +15,7 @@ The ecosystem is a workload, not the goal. Each milestone must leave the simulat
 
 The goal is to prove that two runs are identical, and that a run can stop and resume without changing its outcome.
 
-1. **Canonical state hash.** Encode `WorldState` in a fixed binary layout: tick, `NextEntity`, then every creature and plant in ascending ID order, field by field. Hash the result with SHA-256. Do not hash JSON or map iteration order.
+1. **Canonical state hash** (done). Encode `WorldState` in a fixed binary layout: tick, `NextEntity`, then every creature and plant in ID-slice order (that order drives phase iteration, so it is part of the state), field by field. Hash the result with SHA-256. Do not hash JSON or map iteration order.
    - *Exit:* two runs from the same seed produce the same hash at every tick for 1000 ticks. A golden-hash test pins the hash for one seed at one tick, so any change to the rules or to determinism fails it.
 2. **Checkpoint save and load.** Use a versioned JSON snapshot holding the schema version, world ID, config, `Rules`, `BehaviorRules`, the full `WorldState` and its hash.
    - On load, run `validateState`, recompute the hash, and reject any mismatch.
