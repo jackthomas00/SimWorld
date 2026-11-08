@@ -200,8 +200,7 @@ func validateMoveIntent(
 	if !c.intent.To.InBounds(config.Width, config.Height) {
 		return MoveRejectedOutOfBounds
 	}
-	c.from = creature.Position
-	if c.intent.To == c.from {
+	if c.intent.To == creature.Position {
 		return MoveRejectedNoop
 	}
 	return MoveAccepted
